@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-set -x
-
 dir=$1
 
 if [ -z $dir ]; then
@@ -13,16 +11,14 @@ shift
 
 cwd=$(pwd)
 
-set +x
-
 for repo in "$cwd/$dir"*/; do
   [ -d "$repo" ] || continue
 
-  result="$(git -C "$repo" status)"
-  if [[ $result =~ "working tree clean" ]]; then
+  result="$(git -C "$repo" status --porcelain)"
+  if [[ -z $result ]]; then
     printf ""
   else
-    info "git -C $repo status"
+    echo ">> $repo"
     echo "$result"
   fi
 done

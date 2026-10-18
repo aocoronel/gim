@@ -50,8 +50,7 @@ cleanup :: proc() {
 }
 
 _main :: proc(opt: ^Option) -> (loc: Source_Code_Location, ok: bool) {
-	loc = #location(exec)
-
+	loc = #location(_main)
 	// Load this executable: requires -rdynamic
 	lib := dynlib.load_library("", true) or_return
 	defer dynlib.unload_library(lib)
@@ -75,7 +74,8 @@ _main :: proc(opt: ^Option) -> (loc: Source_Code_Location, ok: bool) {
 			if field_variant.is_cstring do continue
 			value: string = (transmute(^string)&opt_bytes[field_offs])^
 			if value == "" do continue
-			exec(lib, name, value) or_return
+			loc, ok = exec(lib, name, value)
+			if !ok do return
 		}
 	}
 
@@ -90,11 +90,10 @@ exec :: proc(
 	loc: Source_Code_Location,
 	ok: bool,
 ) {
-	loc = #location(exec)
 	ptr, found := dynlib.symbol_address(lib, fmt.tprintf("%s", symbol_name))
 	if !found {
 		fmt.eprintln("Symbol not found:", symbol_name)
-		return
+		return #location(exec), false
 	}
 	cb := cast(Command)ptr
 	return cb(arg)

@@ -58,7 +58,6 @@ main :: proc() {
 		case .Dash_Dash:
 		// rest := get_args()[optind:]
 		case .Help_Request:
-			w := term.terminal_width()
 			fmt.println("Commands:")
 			flags.usage(cmds)
 			fmt.println("Options:")

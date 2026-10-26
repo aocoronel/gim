@@ -50,11 +50,7 @@ iterate_dir :: proc(
 	}
 
 	if err_count > 0 {
-		if opt.verbose {
-			log.errorf("%d errors happened", err_count)
-		} else {
-			log.errorf("%d errors happened. Consider enabling --verbose", err_count)
-		}
+		log.errorf("%d errors happened", err_count)
 		return
 	}
 
@@ -127,7 +123,12 @@ run :: proc() -> (ok: bool) {
 		if file.type != .Directory do return true
 		cmd := (cast(^[dynamic]string)ctx)^
 		cmd[REPO_IDX] = file.fullpath
-		ok := sh(cmd[:], stdout = os.stdout if opt.verbose else nil)
+		p: pipe.Pipe
+		ok := sh(cmd[:], &p)
+		fmt.eprintln(string(p.stderr))
+		if opt.verbose || !ok {
+			fmt.eprintln(string(p.stdout))
+		}
 		return ok
 	}
 

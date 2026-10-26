@@ -1,6 +1,4 @@
 package main
-import "core:strconv"
-import "core:strings"
 
 import "core:fmt"
 import "core:log"
@@ -13,24 +11,13 @@ sh :: pipe.run_command
 Command :: #type proc(arg: string) -> (Source_Code_Location, bool)
 
 Option :: struct {
-	bundle:     string `usage:"
-    Bundle a repository.
-    Takes a name to generate the repo.bundle."`,
-	bundle_all: string `usage:"
-    Bundle all repositories.
-    Takes a path to the root of all repositories."`,
-	not_clean:  string `usage:"
-    Check if any repository is not clean.
-    Takes a path to the root of all repositories."`,
-	verbose:    bool `usage:"
-    Show stdout messages"`,
-	run:        string `usage:"
-    Runs a command in all repositories.
-    Takes a path to the root of all repositories.
-    Requires -args"`,
-	args:       cstring `usage:"
-    Extra arguments.
-    Used in: run"`,
+	run:        [dynamic]string,
+	directory:  string,
+	addremove:  bool,
+	bundle:     bool,
+	bundle_all: bool,
+	not_clean:  bool,
+	verbose:    bool,
 }
 
 opt: Option
@@ -63,27 +50,26 @@ iterate_dir :: proc(
 	}
 
 	if err_count > 0 {
-		log.errorf("Failed to bundle %d repositories", err_count)
+		if err_count == 1 {
+			log.errorf("%d error happened", err_count)
+		} else {
+			log.errorf("%d errors happened", err_count)
+		}
 		return
 	}
 
 	return true
 }
 
-@(export)
-bundle :: proc(repo: string) -> (loc: Source_Code_Location, ok: bool) {
-	loc = #location(bundle)
+bundle :: proc() -> (ok: bool) {
 	ok = sh(
-		{"git", "bundle", "create", fmt.tprintf("%s.bundle", repo), "--all"},
+		{"git", "bundle", "create", fmt.tprintf("%s.bundle", opt.directory), "--all"},
 		stdout = os.stdout if opt.verbose else nil,
 	)
-	return loc if !ok else {}, ok
+	return ok
 }
 
-@(export)
-bundle_all :: proc(dir: string) -> (loc: Source_Code_Location, ok: bool) {
-	loc = #location(bundle_all)
-
+bundle_all :: proc() -> (ok: bool) {
 	procedure :: proc(ctx: rawptr, file: os.File_Info) -> bool {
 		if file.type != .Directory do return true
 		return sh(
@@ -100,14 +86,11 @@ bundle_all :: proc(dir: string) -> (loc: Source_Code_Location, ok: bool) {
 		)
 	}
 
-	iterate_dir(dir, procedure) or_return
-	return {}, true
+	iterate_dir(opt.directory, procedure) or_return
+	return true
 }
 
-@(export)
-not_clean :: proc(dir: string) -> (loc: Source_Code_Location, ok: bool) {
-	loc = #location(not_clean)
-
+not_clean :: proc() -> (ok: bool) {
 	procedure :: proc(ctx: rawptr, file: os.File_Info) -> bool {
 		if file.type != .Directory do return true
 		p: Pipe
@@ -124,24 +107,12 @@ not_clean :: proc(dir: string) -> (loc: Source_Code_Location, ok: bool) {
 		return ok
 	}
 
-	iterate_dir(dir, procedure) or_return
-	return {}, true
+	iterate_dir(opt.directory, procedure) or_return
+	return true
 }
 
-@(export)
-run :: proc(dir: string) -> (loc: Source_Code_Location, ok: bool) {
-	loc = #location(run)
-
-	if opt.args == nil {
-		log.error("-args not set")
-		return
-	}
-
-	splitten_cmd, err := strings.split(string(opt.args), " ")
-	if err != nil {
-		log.error(os.error_string(err))
-		return
-	}
+run :: proc() -> (ok: bool) {
+	splitten_cmd := opt.run[:]
 
 	cmds: [dynamic]string
 
@@ -160,7 +131,12 @@ run :: proc(dir: string) -> (loc: Source_Code_Location, ok: bool) {
 		return ok
 	}
 
-	iterate_dir(dir, procedure, &cmds) or_return
+	iterate_dir(opt.directory, procedure, &cmds) or_return
 
-	return {}, true
+	return true
+}
+
+addremove :: proc() -> (ok: bool) {
+	ok = sh({"git", "-C", opt.directory, "add", "-u"})
+	return
 }

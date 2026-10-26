@@ -1,17 +1,17 @@
 package main
 
 import "base:runtime"
-import "core:dynlib"
-import "core:flags"
 import "core:fmt"
 import "core:log"
 import "core:os"
 import "shared:odd/debug"
+import "shared:odd/flags"
+import "shared:odd/term"
 
 Source_Code_Location :: runtime.Source_Code_Location
 
 main :: proc() {
-	debug.register_back_trace()
+	debug.register_backtrace()
 
 	context.allocator = context.temp_allocator
 
@@ -29,72 +29,89 @@ main :: proc() {
 	}
 	context.logger = log.create_console_logger(opt = LOGGER_OPT)
 
-	flags.parse_or_exit(&opt, os.args, .Odin)
+	opts := []flags.Option {
+		{"C,directory", `#arg=DIR
+         Change directory`, &opt.directory, flags.get_string},
+		{"verbose", `Show stdout messages`, &opt.verbose, flags.get_bool},
+	}
 
-	loc, ok := _main(&opt)
+	cmds := []flags.Option {
+		{"bundle", `Bundle a repository`, &opt.bundle, flags.get_bool},
+		{"bundle-all", `Bundle all repositories`, &opt.bundle_all, flags.get_bool},
+		{"not-clean", `Check if any repository is not clean`, &opt.not_clean, flags.get_bool},
+		{"addremove", `Stages all changes`, &opt.addremove, flags.get_bool},
+		{"run", `#arg=CMD
+         Runs a command in all repositories`, &opt.run, nil},
+	}
 
-	when ODIN_DEBUG {
-		if !ok {
-			fmt.eprintfln("%v: error happened here", loc)
+	m, ferr := flags.init(opts)
+	if !ferr do return
+
+	command: string
+	command_set: bool
+	has_err: bool
+	for flags.has_args_left() {
+		err := flags.parse(m, opts)
+		switch err {
+		case .Ok:
+			continue
+		case .Dash_Dash:
+		// rest := get_args()[optind:]
+		case .Help_Request:
+			w := term.terminal_width()
+			fmt.println("Commands:")
+			flags.usage(cmds)
+			fmt.println("Options:")
+			flags.usage(opts)
+			return
+		case .Not_Opt:
+			if command_set {
+				has_err = true
+				log.errorf("The command %q was already specified.", command)
+				break
+			}
+			for c, i in cmds {
+				if c.name == flags.optopt {
+					command_set = true
+					command = flags.optopt
+					flags.call(cmds, cast(u32)i + 1, false)
+				}
+			}
+			if !command_set {
+				has_err = true
+				log.errorf("%s: command does not exist", flags.optopt)
+			}
+		case .Error:
+			has_err = true
+		}
+	}
+	if has_err do return
+
+	if len(opt.directory) == 0 {
+		err: os.Error
+		opt.directory, err = os.get_working_directory(context.temp_allocator)
+		if err != nil {
+			log.error(os.error_string(err))
+			return
 		}
 	}
 
-	cleanup()
+	ok: bool
+	switch command {
+	case "addremove":
+		ok = addremove()
+	case "bundle":
+		ok = bundle()
+	case "bundle-all":
+		ok = bundle_all()
+	case "not-clean":
+		ok = not_clean()
+	case "run":
+		ok = run()
+	}
+
+	delete(m)
+	log.destroy_console_logger(context.logger)
 
 	os.exit(cast(int)!ok)
-}
-
-cleanup :: proc() {
-	delete(opt.args)
-	log.destroy_console_logger(context.logger)
-}
-
-_main :: proc(opt: ^Option) -> (loc: Source_Code_Location, ok: bool) {
-	loc = #location(_main)
-	// Load this executable: requires -rdynamic
-	lib := dynlib.load_library("", true) or_return
-	defer dynlib.unload_library(lib)
-
-	/*
-    I usually do use switches to dispatch arguments. I wanted to do something different.
-    Here we are reading the Option structure, specifically for string fields. We collect
-    the field name and it's value, and we look at the binary symbols that match a procedure
-    with the same field name.
-    Adding new commands should be as simple as adding a field in Option, and making a procedure.
-    */
-	struct_info := runtime.type_info_base(type_info_of(Option)).variant.(runtime.Type_Info_Struct)
-	opt_bytes := transmute([^]u8)opt
-	for field, field_idx in struct_info.types[:struct_info.field_count] {
-		col_idx := cast(i32)field_idx
-		field_base := runtime.type_info_base(field)
-		field_offs := struct_info.offsets[field_idx]
-		#partial switch field_variant in field_base.variant {
-		case runtime.Type_Info_String:
-			name := struct_info.names[field_idx]
-			if field_variant.is_cstring do continue
-			value: string = (transmute(^string)&opt_bytes[field_offs])^
-			if value == "" do continue
-			loc, ok = exec(lib, name, value)
-			if !ok do return
-		}
-	}
-
-	return {}, true
-}
-
-exec :: proc(
-	lib: dynlib.Library,
-	symbol_name: string,
-	arg: string,
-) -> (
-	loc: Source_Code_Location,
-	ok: bool,
-) {
-	ptr, found := dynlib.symbol_address(lib, fmt.tprintf("%s", symbol_name))
-	if !found {
-		fmt.eprintln("Symbol not found:", symbol_name)
-		return #location(exec), false
-	}
-	cb := cast(Command)ptr
-	return cb(arg)
 }

@@ -67,7 +67,7 @@ main :: proc() {
 		case .Not_Opt:
 			if command_set {
 				has_err = true
-				log.errorf("The command %q was already specified.", command)
+				log.errorf("The command %q was already specified", command)
 				break
 			}
 			for c, i in cmds {

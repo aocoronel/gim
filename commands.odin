@@ -50,10 +50,10 @@ iterate_dir :: proc(
 	}
 
 	if err_count > 0 {
-		if err_count == 1 {
-			log.errorf("%d error happened", err_count)
-		} else {
+		if opt.verbose {
 			log.errorf("%d errors happened", err_count)
+		} else {
+			log.errorf("%d errors happened. Consider enabling --verbose", err_count)
 		}
 		return
 	}

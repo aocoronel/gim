@@ -6,7 +6,6 @@ import "core:log"
 import "core:os"
 import "shared:odd/debug"
 import "shared:odd/flags"
-import "shared:odd/term"
 
 Source_Code_Location :: runtime.Source_Code_Location
 
@@ -32,16 +31,18 @@ main :: proc() {
 	opts := []flags.Option {
 		{"C,directory", `#arg=DIR
          Change directory`, &opt.directory, flags.get_string},
+		{"dry-run", `Don't apply changes`, &opt.dry_run, flags.get_bool},
 		{"verbose", `Show stdout messages`, &opt.verbose, flags.get_bool},
 	}
 
 	cmds := []flags.Option {
 		{"bundle", `Bundle a repository`, &opt.bundle, flags.get_bool},
 		{"bundle-all", `Bundle all repositories`, &opt.bundle_all, flags.get_bool},
+		{"commit", `Stage changes and commit`, &opt.commit, get_rtti_array},
 		{"not-clean", `Check if any repository is not clean`, &opt.not_clean, flags.get_bool},
 		{"addremove", `Stages all changes`, &opt.addremove, flags.get_bool},
 		{"run", `#arg=CMD
-         Runs a command in all repositories`, &opt.run, nil},
+         Runs a command in all repositories`, &opt.run, get_rtti_array},
 	}
 
 	m, ferr := flags.init(opts)
@@ -74,6 +75,7 @@ main :: proc() {
 					command_set = true
 					command = flags.optopt
 					flags.call(cmds, cast(u32)i + 1, false)
+					break
 				}
 			}
 			if !command_set {
@@ -99,6 +101,8 @@ main :: proc() {
 	switch command {
 	case "addremove":
 		ok = addremove()
+	case "commit":
+		ok = commit()
 	case "bundle":
 		ok = bundle()
 	case "bundle-all":

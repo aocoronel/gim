@@ -12,12 +12,14 @@ Command :: #type proc(arg: string) -> (Source_Code_Location, bool)
 
 Option :: struct {
 	run:        [dynamic]string,
+	commit:     [dynamic]string,
 	directory:  string,
 	addremove:  bool,
 	bundle:     bool,
 	bundle_all: bool,
 	not_clean:  bool,
 	verbose:    bool,
+	dry_run:    bool,
 }
 
 opt: Option
@@ -138,6 +140,33 @@ run :: proc() -> (ok: bool) {
 }
 
 addremove :: proc() -> (ok: bool) {
-	ok = sh({"git", "-C", opt.directory, "add", "-u"})
-	return
+	if opt.dry_run {
+		return sh({"git", "-C", opt.directory, "add", "--all", "--dry-run"})
+	} else {
+		return sh({"git", "-C", opt.directory, "add", "--all"})
+	}
+}
+
+commit :: proc() -> (ok: bool) {
+	sh({"git", "-C", opt.directory, "pull"}) or_return
+
+	if opt.dry_run {
+		sh({"git", "-C", opt.directory, "add", "-u", "--dry-run"}) or_return
+	} else {
+		sh({"git", "-C", opt.directory, "add", "-u"}) or_return
+	}
+
+	splitten_cmd := opt.commit[:]
+
+	cmds: [dynamic]string
+
+	append(&cmds, "git", "-C", opt.directory, "commit")
+	if opt.dry_run {
+		append(&cmds, "--dry-run")
+	}
+	for cmd in splitten_cmd {
+		append(&cmds, cmd)
+	}
+
+	return sh(cmds[:])
 }

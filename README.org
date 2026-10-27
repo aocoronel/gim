@@ -1,0 +1,35 @@
+* git-scripts
+
+This repository contains a wrapper for ~git~ with the goal of managing multiple git repositories, and bring some nice features from ~fossil~.
+
+This is WIP.
+
+** Usage
+
+#+BEGIN_SRC
+  Commands:
+    addremove
+        Stages everything
+    bundle
+        Bundle a repository
+    bundle-all
+        Bundle all repositories. Must be ran from a root of git repos
+    commit:[text]..
+        Stage changes and commit
+    not-clean
+        Check if any repository is not clean. Must be ran from a root of git repos
+    run:[CMD]..
+        Runs a command in all repositories. Must be ran from a root of git repos
+        Pass --dry-run afterwards, if the command supports it
+  Options:
+    C,directory:DIR
+        Change directory
+    dry-run
+        Don't apply changes
+    verbose
+    Show stdout messages
+#+END_SRC
+
+# License
+
+This project is available as public-domain under the CC0 License.

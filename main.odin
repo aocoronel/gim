@@ -37,12 +37,32 @@ main :: proc() {
 
 	cmds := []flags.Option {
 		{"bundle", `Bundle a repository`, &opt.bundle, flags.get_bool},
-		{"bundle-all", `Bundle all repositories`, &opt.bundle_all, flags.get_bool},
+		{
+			"bundle-all",
+			`Bundle all repositories.
+             Must be ran from a root of git repos`,
+			&opt.bundle_all,
+			flags.get_bool,
+		},
 		{"commit", `Stage changes and commit`, &opt.commit, get_rtti_array},
-		{"not-clean", `Check if any repository is not clean`, &opt.not_clean, flags.get_bool},
-		{"addremove", `Stages all changes`, &opt.addremove, flags.get_bool},
-		{"run", `#arg=CMD
-         Runs a command in all repositories`, &opt.run, get_rtti_array},
+		{
+			"not-clean",
+			`Check if any repository is not clean.
+             Must be ran from a root of git repos`,
+			&opt.not_clean,
+			flags.get_bool,
+		},
+		{"addremove", `Stages everything`, &opt.addremove, flags.get_bool},
+		{
+			"run",
+			`#arg=CMD
+             Runs a command in all repositories.
+             Must be ran from a root of git repos
+
+             Pass --dry-run afterwards, if the command supports it`,
+			&opt.run,
+			get_rtti_array,
+		},
 	}
 
 	m, ferr := flags.init(opts)

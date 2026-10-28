@@ -179,6 +179,7 @@ clean :: proc() -> (ok: bool) {
 
 open :: proc() -> (ok: bool) {
 	if len(opt.open) == 0 {
+		log.errorf("missing arguments")
 		return false
 	}
 

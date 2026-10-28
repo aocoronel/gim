@@ -169,7 +169,9 @@ commit :: proc() -> (ok: bool) {
 		append(&cmds, cmd)
 	}
 
-	return sh(cmds[:])
+	sh(cmds[:]) or_return
+
+	return sh({"git", "push"})
 }
 
 clean :: proc() -> (ok: bool) {

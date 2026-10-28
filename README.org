@@ -7,27 +7,38 @@ This is WIP.
 ** Usage
 
 #+BEGIN_SRC
+  Usage: gim [option] command
   Commands:
     addremove
         Stages everything
+    all:[CMD]..
+        Runs a command in all repositories. Must be ran from a root of git repos
+        Pass --dry-run afterwards, if the command supports it
     bundle
         Bundle a repository
     bundle-all
         Bundle all repositories. Must be ran from a root of git repos
-    commit:[text]..
+    clean
+        Clean working tree
+    close
+        Remove worktree
+    commit:[git-option]..
         Stage changes and commit
     not-clean
         Check if any repository is not clean. Must be ran from a root of git repos
-    run:[CMD]..
-        Runs a command in all repositories. Must be ran from a root of git repos
-        Pass --dry-run afterwards, if the command supports it
+    open:path [commit-ish] [git-option]
+        Create worktree When using -B flag, omit the branch name
+    update
+        Update current checkout
   Options:
     C,directory:DIR
         Change directory
     dry-run
         Don't apply changes
+    force
+        Ignore destructive warnings
     verbose
-    Show stdout messages
+        Show stdout messages
 #+END_SRC
 
 ** Compiling

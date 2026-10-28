@@ -61,7 +61,8 @@ _main :: proc() -> bool {
 		{
 			name = "open",
 			help = `#arg=path [commit-ish] [git-option],force
- Create worktree`,
+ Create worktree
+ When using -B flag, omit the branch name`,
 			var = &opt.open,
 			fn = get_greedy_array,
 		},

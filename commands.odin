@@ -197,7 +197,12 @@ open :: proc() -> (ok: bool) {
 
 	append(&cmds, "git", "worktree", "add", opt.open[0], branch)
 	for cmd in splitten_cmd {
-		append(&cmds, cmd)
+		if cmd == "-B" {
+			// The directory name is the branch name
+			append(&cmds, "-B", opt.open[0])
+		} else {
+			append(&cmds, cmd)
+		}
 	}
 
 	return sh(cmds[:])

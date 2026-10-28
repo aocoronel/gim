@@ -56,7 +56,7 @@ get_greedy_array :: proc(ptr: rawptr, id: typeid) -> bool {
 	array: _Array
 
 	args_count := len(flags.get_args()) - flags.optind
-	final_optind := flags.optind + args_count
+	final_optind := args_count
 
 	slice_dyn_array :: proc(ptr: rawptr, elem_size, elem_align, count: int) -> ([]byte, bool) {
 		if !runtime.__dynamic_array_resize(ptr, elem_size, elem_align, count) {
@@ -109,11 +109,13 @@ get_greedy_array :: proc(ptr: rawptr, id: typeid) -> bool {
 
 		if array.data != nil {
 			for i in 0 ..< count {
-				get_cstring(&values[i], cstring) or_return
+				ok = get_cstring(&values[i], cstring)
+				if !ok do break
 			}
 		} else {
 			for i in 0 ..< count {
-				get_cstring(nil, cstring) or_return
+				ok = get_cstring(nil, cstring)
+				if !ok do break
 			}
 		}
 	case string:
@@ -123,11 +125,13 @@ get_greedy_array :: proc(ptr: rawptr, id: typeid) -> bool {
 
 		if array.data != nil {
 			for i in 0 ..< count {
-				get_string(&values[i], string) or_return
+				ok = get_string(&values[i], string)
+				if !ok do break
 			}
 		} else {
 			for i in 0 ..< count {
-				get_string(nil, string) or_return
+				ok = get_string(nil, string)
+				if !ok do break
 			}
 		}
 	case:

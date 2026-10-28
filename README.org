@@ -30,6 +30,19 @@ This is WIP.
     Show stdout messages
 #+END_SRC
 
+** My workflow
+
+#+BEGIN_SRC bash
+odin build . -o:speed -out:gim -microarch:native
+#+END_SRC
+
+- Create bare repository
+- ~gim open trunk~ or ~gim open my-feature -B~
+- Do work: ~gim commit -m "message"~...
+- ~gim close~
+
+But what happened there? The bare repo, is akin to a ~repo.fossil~, and ~gim open trunk~ opens a worktree with default ~main~ branch. After doing work, if untracked files exist I do ~gim addremove~, then ~git commit~, otherwise just ~gim commit~. The commit command will: pull changes, stage tracked files, commit and push changes back. Then we close the trunk worktree, by running ~gim close~ within the worktree.
+
 # License
 
 This project is available as public-domain under the CC0 License.

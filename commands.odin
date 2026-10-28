@@ -25,6 +25,7 @@ Option :: struct {
 	verbose:    bool,
 	force:      bool,
 	dry_run:    bool,
+	update:     bool,
 }
 
 opt: Option
@@ -177,6 +178,13 @@ commit :: proc() -> (ok: bool) {
 clean :: proc() -> (ok: bool) {
 	sh({"git", "reset", "--hard"}) or_return
 	return sh({"git", "clean", "-fdx", "-n" if opt.dry_run else ""})
+}
+
+update :: proc() -> (ok: bool) {
+	sh({"git", "stash", "save", "--all"}, stdout = nil) or_return
+	ok = sh({"git", "pull"})
+	sh({"git", "stash", "pop"}, stdout = nil) or_return
+	return ok
 }
 
 open :: proc() -> (ok: bool) {

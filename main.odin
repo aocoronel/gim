@@ -83,6 +83,13 @@ _main :: proc() -> bool {
 			fn = get_greedy_array,
 		},
 		{
+			name = "update",
+			help = `Update current checkout`,
+			var = &opt.update,
+			fn = flags.get_bool,
+		},
+		{name = "up", help = `#hidden`, var = &opt.update, fn = flags.get_bool},
+		{
 			name = "not-clean",
 			help = `
  Check if any repository is not clean.
@@ -177,16 +184,17 @@ _main :: proc() -> bool {
 run_cmd :: proc(command: string) -> bool {
 	switch command {
     // odinfmt: disable
-	case "addremove":  return addremove()
-	case "all":        return all()
-	case "bundle":     return bundle()
+	case "addremove":     return addremove()
+	case "all":           return all()
+	case "bundle":        return bundle()
 	// TBD: port _all commands to all
-	case "bundle-all": return bundle_all()
-	case "clean":      return clean()
-	case "close":      return close()
-	case "commit":     return commit()
-	case "not-clean":  return not_clean()
-	case "open":       return open()
+	case "bundle-all":    return bundle_all()
+	case "clean":         return clean()
+	case "close":         return close()
+	case "commit":        return commit()
+	case "not-clean":     return not_clean()
+	case "open":          return open()
+	case "update", "up":  return update()
     // odinfmt: enable
 	}
 	return false

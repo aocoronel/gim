@@ -1,4 +1,4 @@
-* git-scripts
+* gim
 
 This repository contains a wrapper for ~git~ with the goal of managing multiple git repositories, and bring some nice features from ~fossil~.
 
@@ -30,11 +30,13 @@ This is WIP.
     Show stdout messages
 #+END_SRC
 
-** My workflow
+** Compiling
 
 #+BEGIN_SRC bash
-odin build . -o:speed -out:gim -microarch:native
+odin build . -o:speed -microarch:native
 #+END_SRC
+
+** My workflow
 
 - Create bare repository
 - ~gim open trunk~ or ~gim open my-feature -B~

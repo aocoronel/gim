@@ -9,7 +9,70 @@ import "shared:odd/flags"
 
 Source_Code_Location :: runtime.Source_Code_Location
 
-main :: proc() {
+opts := []flags.Option {
+	{
+		name = "C,directory",
+		help = `#arg=DIR
+ Change directory`,
+		var = &opt.directory,
+		fn = flags.get_string,
+	},
+	{name = "dry-run", help = `Don't apply changes`, var = &opt.dry_run, fn = flags.get_bool},
+	{name = "verbose", help = `Show stdout messages`, var = &opt.verbose, fn = flags.get_bool},
+	{name = "force", help = `Ignore destructive warnings`, var = &opt.force, fn = flags.get_bool},
+}
+
+cmds := []flags.Option {
+	{name = "clean", help = `Clean working tree`, var = &opt.clean, fn = flags.get_bool},
+	{name = "close", help = `#arg=path
+ Remove worktree`, var = &opt.close, fn = flags.get_bool},
+	{
+		name = "open",
+		help = `#arg=path [commit-ish] [git-option],force
+ Create worktree`,
+		var = &opt.open,
+		fn = get_greedy_array,
+	},
+	{name = "bundle", help = `Bundle a repository`, var = &opt.bundle, fn = flags.get_bool},
+	{
+		name = "bundle-all",
+		help = `
+ Bundle all repositories.
+ Must be ran from a root of git repos`,
+		var = &opt.bundle_all,
+		fn = flags.get_bool,
+	},
+	{
+		name = "commit",
+		help = `#arg=git-option
+ Stage changes and commit`,
+		var = &opt.commit,
+		fn = get_greedy_array,
+	},
+	{
+		name = "not-clean",
+		help = `
+ Check if any repository is not clean.
+ Must be ran from a root of git repos`,
+		var = &opt.not_clean,
+		fn = flags.get_bool,
+	},
+	{name = "addremove", help = `Stages everything`, var = &opt.addremove, fn = flags.get_bool},
+	{
+		name = "all",
+		help = `#arg=CMD
+ Runs a command in all repositories.
+ Must be ran from a root of git repos
+
+ Pass --dry-run afterwards, if the command supports it`,
+		var = &opt.all,
+		fn = get_greedy_array,
+	},
+}
+
+main :: proc() {ok := _main(); os.exit(cast(int)!ok)}
+
+_main :: proc() -> bool {
 	debug.register_backtrace()
 
 	context.allocator = context.temp_allocator
@@ -27,46 +90,10 @@ main :: proc() {
 		LOGGER_OPT :: log.Options{.Level, .Terminal_Color}
 	}
 	context.logger = log.create_console_logger(opt = LOGGER_OPT)
+	defer log.destroy_console_logger(context.logger)
 
-	opts := []flags.Option {
-		{"C,directory", `#arg=DIR
-         Change directory`, &opt.directory, flags.get_string},
-		{"dry-run", `Don't apply changes`, &opt.dry_run, flags.get_bool},
-		{"verbose", `Show stdout messages`, &opt.verbose, flags.get_bool},
-	}
-
-	cmds := []flags.Option {
-		{"bundle", `Bundle a repository`, &opt.bundle, flags.get_bool},
-		{
-			"bundle-all",
-			`Bundle all repositories.
-             Must be ran from a root of git repos`,
-			&opt.bundle_all,
-			flags.get_bool,
-		},
-		{"commit", `Stage changes and commit`, &opt.commit, get_rtti_array},
-		{
-			"not-clean",
-			`Check if any repository is not clean.
-             Must be ran from a root of git repos`,
-			&opt.not_clean,
-			flags.get_bool,
-		},
-		{"addremove", `Stages everything`, &opt.addremove, flags.get_bool},
-		{
-			"run",
-			`#arg=CMD
-             Runs a command in all repositories.
-             Must be ran from a root of git repos
-
-             Pass --dry-run afterwards, if the command supports it`,
-			&opt.run,
-			get_rtti_array,
-		},
-	}
-
-	m, ferr := flags.init(opts)
-	if !ferr do return
+	m := flags.init(opts) or_return
+	defer delete(m)
 
 	command: string
 	command_set: bool
@@ -83,7 +110,7 @@ main :: proc() {
 			flags.usage(cmds)
 			fmt.println("Options:")
 			flags.usage(opts)
-			return
+			return true
 		case .Not_Opt:
 			if command_set {
 				has_err = true
@@ -106,35 +133,44 @@ main :: proc() {
 			has_err = true
 		}
 	}
-	if has_err do return
+	if has_err do return false
 
 	if len(opt.directory) == 0 {
 		err: os.Error
 		opt.directory, err = os.get_working_directory(context.temp_allocator)
 		if err != nil {
 			log.error(os.error_string(err))
-			return
+			return false
 		}
 	}
 
-	ok: bool
-	switch command {
-	case "addremove":
-		ok = addremove()
-	case "commit":
-		ok = commit()
-	case "bundle":
-		ok = bundle()
-	case "bundle-all":
-		ok = bundle_all()
-	case "not-clean":
-		ok = not_clean()
-	case "run":
-		ok = run()
+	{
+		err := os.change_directory(opt.directory)
+		if err != nil {
+			log.errorf("%s: %s", opt.directory, os.error_string(err))
+			return false
+		}
 	}
 
-	delete(m)
-	log.destroy_console_logger(context.logger)
+	ok := run_cmd(command)
 
-	os.exit(cast(int)!ok)
+	return ok
+}
+
+run_cmd :: proc(command: string) -> bool {
+	switch command {
+    // odinfmt: disable
+	case "addremove":  return addremove()
+	case "all":        return all()
+	case "bundle":     return bundle()
+	// TBD: port _all commands to all
+	case "bundle-all": return bundle_all()
+	case "clean":      return clean()
+	case "close":      return close()
+	case "commit":     return commit()
+	case "not-clean":  return not_clean()
+	case "open":       return open()
+    // odinfmt: enable
+	}
+	return false
 }

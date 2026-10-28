@@ -5,6 +5,11 @@ import "core:log"
 import "core:mem"
 import "shared:odd/flags"
 
+/*
+Forked a few procedures from odd/flags to support collecting any number of
+arguments, even if it's an option, so they can be forwarded to git
+*/
+
 _Array :: struct {
 	data:             []byte,
 	elem, index:      ^runtime.Type_Info,
@@ -47,7 +52,7 @@ get_string :: proc(ptr: rawptr, id: typeid) -> bool {
 	return ok
 }
 
-get_rtti_array :: proc(ptr: rawptr, id: typeid) -> bool {
+get_greedy_array :: proc(ptr: rawptr, id: typeid) -> bool {
 	array: _Array
 
 	args_count := len(flags.get_args()) - flags.optind

@@ -9,67 +9,6 @@ import "shared:odd/flags"
 
 Source_Code_Location :: runtime.Source_Code_Location
 
-opts := []flags.Option {
-	{
-		name = "C,directory",
-		help = `#arg=DIR
- Change directory`,
-		var = &opt.directory,
-		fn = flags.get_string,
-	},
-	{name = "dry-run", help = `Don't apply changes`, var = &opt.dry_run, fn = flags.get_bool},
-	{name = "verbose", help = `Show stdout messages`, var = &opt.verbose, fn = flags.get_bool},
-	{name = "force", help = `Ignore destructive warnings`, var = &opt.force, fn = flags.get_bool},
-}
-
-cmds := []flags.Option {
-	{name = "clean", help = `Clean working tree`, var = &opt.clean, fn = flags.get_bool},
-	{name = "close", help = `#arg=path
- Remove worktree`, var = &opt.close, fn = flags.get_bool},
-	{
-		name = "open",
-		help = `#arg=path [commit-ish] [git-option],force
- Create worktree`,
-		var = &opt.open,
-		fn = get_greedy_array,
-	},
-	{name = "bundle", help = `Bundle a repository`, var = &opt.bundle, fn = flags.get_bool},
-	{
-		name = "bundle-all",
-		help = `
- Bundle all repositories.
- Must be ran from a root of git repos`,
-		var = &opt.bundle_all,
-		fn = flags.get_bool,
-	},
-	{
-		name = "commit",
-		help = `#arg=git-option
- Stage changes and commit`,
-		var = &opt.commit,
-		fn = get_greedy_array,
-	},
-	{
-		name = "not-clean",
-		help = `
- Check if any repository is not clean.
- Must be ran from a root of git repos`,
-		var = &opt.not_clean,
-		fn = flags.get_bool,
-	},
-	{name = "addremove", help = `Stages everything`, var = &opt.addremove, fn = flags.get_bool},
-	{
-		name = "all",
-		help = `#arg=CMD
- Runs a command in all repositories.
- Must be ran from a root of git repos
-
- Pass --dry-run afterwards, if the command supports it`,
-		var = &opt.all,
-		fn = get_greedy_array,
-	},
-}
-
 main :: proc() {ok := _main(); os.exit(cast(int)!ok)}
 
 _main :: proc() -> bool {
@@ -91,6 +30,82 @@ _main :: proc() -> bool {
 	}
 	context.logger = log.create_console_logger(opt = LOGGER_OPT)
 	defer log.destroy_console_logger(context.logger)
+
+	opts := []flags.Option {
+		{
+			name = "C,directory",
+			help = `#arg=DIR
+ Change directory`,
+			var = &opt.directory,
+			fn = flags.get_string,
+		},
+		{name = "dry-run", help = `Don't apply changes`, var = &opt.dry_run, fn = flags.get_bool},
+		{name = "verbose", help = `Show stdout messages`, var = &opt.verbose, fn = flags.get_bool},
+		{
+			name = "force",
+			help = `Ignore destructive warnings`,
+			var = &opt.force,
+			fn = flags.get_bool,
+		},
+	}
+
+	cmds := []flags.Option {
+		{name = "clean", help = `Clean working tree`, var = &opt.clean, fn = flags.get_bool},
+		{
+			name = "close",
+			help = `#arg=path
+ Remove worktree`,
+			var = &opt.close,
+			fn = flags.get_bool,
+		},
+		{
+			name = "open",
+			help = `#arg=path [commit-ish] [git-option],force
+ Create worktree`,
+			var = &opt.open,
+			fn = get_greedy_array,
+		},
+		{name = "bundle", help = `Bundle a repository`, var = &opt.bundle, fn = flags.get_bool},
+		{
+			name = "bundle-all",
+			help = `
+ Bundle all repositories.
+ Must be ran from a root of git repos`,
+			var = &opt.bundle_all,
+			fn = flags.get_bool,
+		},
+		{
+			name = "commit",
+			help = `#arg=git-option
+ Stage changes and commit`,
+			var = &opt.commit,
+			fn = get_greedy_array,
+		},
+		{
+			name = "not-clean",
+			help = `
+ Check if any repository is not clean.
+ Must be ran from a root of git repos`,
+			var = &opt.not_clean,
+			fn = flags.get_bool,
+		},
+		{
+			name = "addremove",
+			help = `Stages everything`,
+			var = &opt.addremove,
+			fn = flags.get_bool,
+		},
+		{
+			name = "all",
+			help = `#arg=CMD
+ Runs a command in all repositories.
+ Must be ran from a root of git repos
+
+ Pass --dry-run afterwards, if the command supports it`,
+			var = &opt.all,
+			fn = get_greedy_array,
+		},
+	}
 
 	m := flags.init(opts) or_return
 	defer delete(m)

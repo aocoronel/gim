@@ -106,6 +106,7 @@ _main :: proc() -> bool {
 		case .Dash_Dash:
 		// rest := get_args()[optind:]
 		case .Help_Request:
+			fmt.println("Usage:", flags.get_args()[0], "[option]", "command")
 			fmt.println("Commands:")
 			flags.usage(cmds)
 			fmt.println("Options:")

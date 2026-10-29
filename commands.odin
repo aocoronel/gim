@@ -40,7 +40,9 @@ all :: proc(procedure: proc() -> bool) -> bool {
 		if file.type != .Directory do continue
 		opt.directory = file.fullpath
 		cd(opt.directory) or_return
-		fmt.printfln(">> %s", file.name)
+		if opt.verbose {
+			fmt.printfln(">> %s", file.name)
+		}
 		if !procedure() do err_count += 1
 	}
 
@@ -70,17 +72,40 @@ bundle :: proc() -> bool {
 
 not_clean :: proc() -> bool {
 	p: Pipe
-	ok := sh({"git", "status", "--porcelain"}, &p)
-	if len(p.stdout) > 0 {
-		fmt.printfln(">> %s", os.base(opt.directory))
-		if opt.verbose {
-			fmt.eprintln(string(p.stdout))
+
+	sh({"git", "worktree", "list"}, &p) or_return
+	if len(p.stdout) == 0 do return false
+
+	lines, err := strings.split_lines(string(p.stdout))
+
+	if err != nil {
+		log.error(os.error_string(err))
+		return false
+	}
+
+	err_count: int
+	for line in lines {
+		if len(line) == 0 || strings.contains(line, "(bare)") do continue
+
+		path_end := strings.index_rune(line, ' ')
+		assert(path_end != -1)
+
+		path := line[:path_end]
+
+		ok := sh({"git", "-C", path, "status", "--porcelain"}, &p)
+		if !ok do err_count += 1
+		if len(p.stdout) > 0 {
+			fmt.printfln(">>> %s", path)
+			if opt.verbose {
+				fmt.eprintln(string(p.stdout))
+			}
+		}
+		if len(p.stderr) > 0 {
+			fmt.eprintln(string(p.stderr))
 		}
 	}
-	if len(p.stderr) > 0 {
-		fmt.eprintln(string(p.stderr))
-	}
-	return ok
+
+	return err_count == 0
 }
 
 bulk :: proc() -> bool {

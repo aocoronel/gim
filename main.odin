@@ -50,14 +50,8 @@ _main :: proc() -> bool {
 	}
 
 	cmds := []flags.Option {
-		{name = "clean", help = `Clean working tree`, var = &opt.clean, fn = flags.get_bool},
-		{
-			name = "close",
-			help = `#arg=path
- Remove worktree`,
-			var = &opt.close,
-			fn = flags.get_bool,
-		},
+		{name = "clean", help = `Clean working tree`},
+		{name = "close", help = `Remove worktree`},
 		{
 			name = "open",
 			help = `#arg=path [commit-ish] [git-option],force
@@ -66,14 +60,12 @@ _main :: proc() -> bool {
 			var = &opt.open,
 			fn = get_greedy_array,
 		},
-		{name = "bundle", help = `Bundle a repository`, var = &opt.bundle, fn = flags.get_bool},
+		{name = "bundle", help = `Bundle a repository`},
 		{
 			name = "bundle-all",
 			help = `
  Bundle all repositories.
  Must be ran from a root of git repos`,
-			var = &opt.bundle_all,
-			fn = flags.get_bool,
 		},
 		{
 			name = "commit",
@@ -82,27 +74,15 @@ _main :: proc() -> bool {
 			var = &opt.commit,
 			fn = get_greedy_array,
 		},
-		{
-			name = "update",
-			help = `Update current checkout`,
-			var = &opt.update,
-			fn = flags.get_bool,
-		},
-		{name = "up", help = `#hidden`, var = &opt.update, fn = flags.get_bool},
+		{name = "update", help = `Update current checkout`},
+		{name = "up", help = `#hidden`},
 		{
 			name = "not-clean",
 			help = `
  Check if any repository is not clean.
  Must be ran from a root of git repos`,
-			var = &opt.not_clean,
-			fn = flags.get_bool,
 		},
-		{
-			name = "addremove",
-			help = `Stages everything`,
-			var = &opt.addremove,
-			fn = flags.get_bool,
-		},
+		{name = "addremove", help = `Stages everything`},
 		{
 			name = "all",
 			help = `#arg=CMD
@@ -145,7 +125,9 @@ _main :: proc() -> bool {
 				if c.name == flags.optopt {
 					command_set = true
 					command = flags.optopt
-					flags.call(cmds, cast(u32)i + 1, false)
+					if c.fn != nil {
+						flags.call(cmds, cast(u32)i + 1, false)
+					}
 					break
 				}
 			}
@@ -183,7 +165,7 @@ _main :: proc() -> bool {
 
 run_cmd :: proc(command: string) -> bool {
 	switch command {
-    // odinfmt: disable
+  // odinfmt: disable
 	case "addremove":     return addremove()
 	case "all":           return all()
 	case "bundle":        return bundle()
@@ -195,7 +177,8 @@ run_cmd :: proc(command: string) -> bool {
 	case "not-clean":     return not_clean()
 	case "open":          return open()
 	case "update", "up":  return update()
-    // odinfmt: enable
+  // odinfmt: enable
 	}
+
 	return false
 }

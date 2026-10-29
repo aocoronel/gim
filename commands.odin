@@ -12,20 +12,13 @@ sh :: pipe.run_command
 Command :: #type proc(arg: string) -> (Source_Code_Location, bool)
 
 Option :: struct {
-	all:        [dynamic]string,
-	commit:     [dynamic]string,
-	open:       [dynamic]string,
-	clean:      bool,
-	close:      bool,
-	directory:  string,
-	addremove:  bool,
-	bundle:     bool,
-	bundle_all: bool,
-	not_clean:  bool,
-	verbose:    bool,
-	force:      bool,
-	dry_run:    bool,
-	update:     bool,
+	all:       [dynamic]string,
+	commit:    [dynamic]string,
+	open:      [dynamic]string,
+	directory: string,
+	dry_run:   bool,
+	force:     bool,
+	verbose:   bool,
 }
 
 opt: Option
@@ -64,12 +57,13 @@ iterate_dir :: proc(
 	return true
 }
 
-bundle :: proc() -> (ok: bool) {
-	ok = sh({"git", "bundle", "create", fmt.tprintf("%s.bundle", os.base(opt.directory)), "--all"})
-	return ok
+bundle :: proc() -> bool {
+	return sh(
+		{"git", "bundle", "create", fmt.tprintf("%s.bundle", os.base(opt.directory)), "--all"},
+	)
 }
 
-bundle_all :: proc() -> (ok: bool) {
+bundle_all :: proc() -> bool {
 	procedure :: proc(ctx: rawptr, file: os.File_Info) -> bool {
 		if file.type != .Directory do return true
 
@@ -86,11 +80,10 @@ bundle_all :: proc() -> (ok: bool) {
 		)
 	}
 
-	iterate_dir(opt.directory, procedure) or_return
-	return true
+	return iterate_dir(opt.directory, procedure)
 }
 
-not_clean :: proc() -> (ok: bool) {
+not_clean :: proc() -> bool {
 	procedure :: proc(ctx: rawptr, file: os.File_Info) -> bool {
 		if file.type != .Directory do return true
 		p: Pipe
@@ -107,11 +100,10 @@ not_clean :: proc() -> (ok: bool) {
 		return ok
 	}
 
-	iterate_dir(opt.directory, procedure) or_return
-	return true
+	return iterate_dir(opt.directory, procedure)
 }
 
-all :: proc() -> (ok: bool) {
+all :: proc() -> bool {
 	splitten_cmd := opt.all[:]
 
 	cmds: [dynamic]string
@@ -136,27 +128,17 @@ all :: proc() -> (ok: bool) {
 		return ok
 	}
 
-	iterate_dir(opt.directory, procedure, &cmds) or_return
-
-	return true
+	return iterate_dir(opt.directory, procedure, &cmds)
 }
 
-addremove :: proc() -> (ok: bool) {
-	if opt.dry_run {
-		return sh({"git", "add", "--all", "--dry-run"})
-	} else {
-		return sh({"git", "add", "--all"})
-	}
+addremove :: proc() -> bool {
+	return sh({"git", "add", "--all", "--dry-run" if opt.dry_run else ""})
 }
 
-commit :: proc() -> (ok: bool) {
+commit :: proc() -> bool {
 	sh({"git", "pull"}) or_return
 
-	if opt.dry_run {
-		sh({"git", "add", "-u", "--dry-run"}) or_return
-	} else {
-		sh({"git", "add", "-u"}) or_return
-	}
+	sh({"git", "add", "-u", "--dry-run" if opt.dry_run else ""}) or_return
 
 	splitten_cmd := opt.commit[:]
 
@@ -175,19 +157,19 @@ commit :: proc() -> (ok: bool) {
 	return sh({"git", "push"})
 }
 
-clean :: proc() -> (ok: bool) {
+clean :: proc() -> bool {
 	sh({"git", "reset", "--hard"}) or_return
 	return sh({"git", "clean", "-fdx", "-n" if opt.dry_run else ""})
 }
 
 update :: proc() -> (ok: bool) {
-	sh({"git", "stash", "save", "--all"}, stdout = nil) or_return
+	sh({"git", "stash", "save", "--all"}, stdout = os.stdout if opt.verbose else nil) or_return
 	ok = sh({"git", "pull"})
-	sh({"git", "stash", "pop"}, stdout = nil) or_return
-	return ok
+	sh({"git", "stash", "pop"}, stdout = os.stdout if opt.verbose else nil) or_return
+	return
 }
 
-open :: proc() -> (ok: bool) {
+open :: proc() -> bool {
 	if len(opt.open) == 0 {
 		log.errorf("missing arguments")
 		return false
@@ -209,7 +191,7 @@ open :: proc() -> (ok: bool) {
 	for cmd in splitten_cmd {
 		if cmd == "-B" {
 			// The directory name is the branch name
-			append(&cmds, "-B", opt.open[0])
+			append(&cmds, "-B", os.base(opt.open[0]))
 		} else {
 			append(&cmds, cmd)
 		}
@@ -219,7 +201,6 @@ open :: proc() -> (ok: bool) {
 }
 
 close :: proc() -> (ok: bool) {
-	ok = true
 	p: Pipe
 	sh({"git", "status", "--porcelain"}, &p)
 	if len(p.stdout) > 0 && !opt.force {
@@ -227,7 +208,7 @@ close :: proc() -> (ok: bool) {
 			"%q contains modified or untracked files, use --force to delete it",
 			opt.directory,
 		)
-		return ok
+		return true
 	}
 
 	content, err := os.read_entire_file(
@@ -236,14 +217,14 @@ close :: proc() -> (ok: bool) {
 	)
 	if err != nil {
 		log.errorf("not in a git repository")
-		return false
+		return
 	}
 
 	s := strings.trim_right(string(content), "\n")
 	is_valid := strings.starts_with(s, "gitdir: ")
 	if !is_valid {
 		log.errorf("not in a git repository")
-		return false
+		return
 	}
 
 	worktree := s[len("gitdir: "):]
@@ -251,7 +232,6 @@ close :: proc() -> (ok: bool) {
 	err = os.remove_all(worktree)
 	if err != nil {
 		log.errorf("%s: %s", worktree, os.error_string(err))
-		ok = false
 	}
 
 	procedure :: proc(ctx: rawptr, file: os.File_Info) -> bool {

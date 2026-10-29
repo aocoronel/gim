@@ -12,9 +12,8 @@ sh :: pipe.run_command
 Command :: #type proc(arg: string) -> (Source_Code_Location, bool)
 
 Option :: struct {
-	all:       [dynamic]string,
-	commit:    [dynamic]string,
-	open:      [dynamic]string,
+	args:      [dynamic]string,
+	arg:       string,
 	directory: string,
 	dry_run:   bool,
 	force:     bool,
@@ -23,38 +22,44 @@ Option :: struct {
 
 opt: Option
 
-Iterate_Dir_Callback :: #type proc(ctx: rawptr, file: os.File_Info) -> bool
-
-iterate_dir :: proc(
-	dir: string,
-	procedure: Iterate_Dir_Callback,
-	ctx: rawptr = nil,
-) -> (
-	ok: bool,
-) {
-	if !os.is_dir(dir) {
+all :: proc(procedure: proc() -> bool) -> bool {
+	if !os.is_dir(opt.directory) {
 		log.error("expected a directory")
-		return
+		return false
 	}
 
-	files, err := os.read_directory_by_path(dir, -1, context.allocator)
+	files, err := os.read_directory_by_path(opt.directory, -1, context.allocator)
 
 	if err != nil {
 		log.error(os.error_string(err))
-		return
+		return false
 	}
 
 	err_count: int
 	for file in files {
-		if !procedure(ctx, file) do err_count += 1
+		if file.type != .Directory do continue
+		opt.directory = file.fullpath
+		cd(opt.directory) or_return
+		fmt.printfln(">> %s", file.name)
+		if !procedure() do err_count += 1
 	}
 
 	if err_count > 0 {
 		log.errorf("%d errors happened", err_count)
-		return
+		return false
 	}
 
 	return true
+}
+
+push_today :: proc() -> bool {
+	p: Pipe
+	sh({"git", "log", "--since", "today"}, &p) or_return
+	if len(p.stdout) == 0 {
+		fmt.println("Nothing to do")
+		return true
+	}
+	return sh({"git", "push"})
 }
 
 bundle :: proc() -> bool {
@@ -63,72 +68,64 @@ bundle :: proc() -> bool {
 	)
 }
 
-bundle_all :: proc() -> bool {
-	procedure :: proc(ctx: rawptr, file: os.File_Info) -> bool {
-		if file.type != .Directory do return true
-
-		return sh(
-			{
-				"git",
-				"-C",
-				file.fullpath,
-				"bundle",
-				"create",
-				fmt.tprintf("%s.bundle", file.name),
-				"--all",
-			},
-		)
-	}
-
-	return iterate_dir(opt.directory, procedure)
-}
-
 not_clean :: proc() -> bool {
-	procedure :: proc(ctx: rawptr, file: os.File_Info) -> bool {
-		if file.type != .Directory do return true
-		p: Pipe
-		ok := sh({"git", "-C", file.fullpath, "status", "--porcelain"}, &p)
-		if len(p.stdout) > 0 {
-			fmt.printfln(">> %s", file.name)
-			if opt.verbose {
-				fmt.eprintln(string(p.stdout))
-			}
+	p: Pipe
+	ok := sh({"git", "status", "--porcelain"}, &p)
+	if len(p.stdout) > 0 {
+		fmt.printfln(">> %s", os.base(opt.directory))
+		if opt.verbose {
+			fmt.eprintln(string(p.stdout))
 		}
-		if len(p.stderr) > 0 {
-			fmt.eprintln(string(p.stderr))
-		}
-		return ok
 	}
-
-	return iterate_dir(opt.directory, procedure)
+	if len(p.stderr) > 0 {
+		fmt.eprintln(string(p.stderr))
+	}
+	return ok
 }
 
-all :: proc() -> bool {
-	splitten_cmd := opt.all[:]
+bulk :: proc() -> bool {
+	if !os.is_dir(opt.directory) {
+		log.error("expected a directory")
+		return false
+	}
 
-	cmds: [dynamic]string
+	files, err := os.read_directory_by_path(opt.directory, -1, context.allocator)
+
+	if err != nil {
+		log.error(os.error_string(err))
+		return false
+	}
 
 	REPO_IDX :: 2
+	splitten_cmd := opt.args[:]
+	cmds: [dynamic]string
 
 	append(&cmds, "git", "-C", "")
 	for cmd in splitten_cmd {
 		append(&cmds, cmd)
 	}
 
-	procedure :: proc(ctx: rawptr, file: os.File_Info) -> bool {
-		if file.type != .Directory do return true
-		cmd := (cast(^[dynamic]string)ctx)^
-		cmd[REPO_IDX] = file.fullpath
+	err_count: int
+	for file in files {
+		if file.type != .Directory do continue
+
+		cmds[REPO_IDX] = file.fullpath
 		p: pipe.Pipe
-		ok := sh(cmd[:], &p)
+		ok := sh(cmds[:], &p)
 		fmt.eprintln(string(p.stderr))
 		if opt.verbose || !ok {
 			fmt.eprintln(string(p.stdout))
 		}
-		return ok
+
+		if !ok do err_count += 1
 	}
 
-	return iterate_dir(opt.directory, procedure, &cmds)
+	if err_count > 0 {
+		log.errorf("%d errors happened", err_count)
+		return false
+	}
+
+	return true
 }
 
 addremove :: proc() -> bool {
@@ -140,7 +137,7 @@ commit :: proc() -> bool {
 
 	sh({"git", "add", "-u", "--dry-run" if opt.dry_run else ""}) or_return
 
-	splitten_cmd := opt.commit[:]
+	splitten_cmd := opt.args[:]
 
 	cmds: [dynamic]string
 
@@ -157,6 +154,10 @@ commit :: proc() -> bool {
 	return sh({"git", "push"})
 }
 
+news :: proc() -> bool {
+	return sh({"git", "log", "--since", opt.arg})
+}
+
 clean :: proc() -> bool {
 	sh({"git", "reset", "--hard"}) or_return
 	return sh({"git", "clean", "-fdx", "-n" if opt.dry_run else ""})
@@ -170,28 +171,28 @@ update :: proc() -> (ok: bool) {
 }
 
 open :: proc() -> bool {
-	if len(opt.open) == 0 {
+	if len(opt.args) == 0 {
 		log.errorf("missing arguments")
 		return false
 	}
 
 	branch: string
-	splitten_cmd := opt.open[1:]
+	splitten_cmd := opt.args[1:]
 
-	if len(opt.open) > 1 && opt.open[1][0] != '-' {
-		branch = opt.open[1]
-		splitten_cmd = opt.open[2:]
+	if len(opt.args) > 1 && opt.args[1][0] != '-' {
+		branch = opt.args[1]
+		splitten_cmd = opt.args[2:]
 	} else {
 		branch = "main"
 	}
 
 	cmds: [dynamic]string
 
-	append(&cmds, "git", "worktree", "add", opt.open[0], branch)
+	append(&cmds, "git", "worktree", "add", opt.args[0], branch)
 	for cmd in splitten_cmd {
 		if cmd == "-B" {
 			// The directory name is the branch name
-			append(&cmds, "-B", os.base(opt.open[0]))
+			append(&cmds, "-B", os.base(opt.args[0]))
 		} else {
 			append(&cmds, cmd)
 		}
@@ -211,10 +212,8 @@ close :: proc() -> (ok: bool) {
 		return true
 	}
 
-	content, err := os.read_entire_file(
-		fmt.tprintf("%s/.git", opt.directory),
-		context.temp_allocator,
-	)
+	git_file := fmt.tprintf("%s/.git", opt.directory)
+	content, err := os.read_entire_file(git_file, context.temp_allocator)
 	if err != nil {
 		log.errorf("not in a git repository")
 		return
@@ -234,28 +233,11 @@ close :: proc() -> (ok: bool) {
 		log.errorf("%s: %s", worktree, os.error_string(err))
 	}
 
-	procedure :: proc(ctx: rawptr, file: os.File_Info) -> bool {
-		err: os.Error
-
-		#partial switch file.type {
-		case .Directory:
-			err = os.remove_all(file.fullpath)
-		case .Regular, .Symlink:
-			err = os.remove(file.fullpath)
-		case:
-			log.errorf("%s: cannot remove", file.fullpath)
-			return false
-		}
-
-		if err != nil {
-			log.errorf("%s: %s", file.fullpath, os.error_string(err))
-			return false
-		}
-
-		return true
+	err = os.remove(git_file)
+	if err != nil {
+		log.errorf("%s: %s", git_file, os.error_string(err))
+		return false
 	}
-
-	iterate_dir(opt.directory, procedure) or_return
 
 	return ok
 }

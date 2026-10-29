@@ -34,7 +34,7 @@ _main :: proc() -> bool {
 	opts := []flags.Option {
 		{
 			name = "C,directory",
-			help = `#arg=DIR
+			help = `#arg=dir
  Change directory`,
 			var = &opt.directory,
 			fn = flags.get_string,
@@ -49,57 +49,51 @@ _main :: proc() -> bool {
 		},
 	}
 
+	COMMIT :: ```
+#arg=git-option
+Stage changes and commit
+```
+
+	OPEN :: ```
+#arg=path [commit-ish] [git-option],force
+Create worktree
+
+When using -B flag, omit the branch name
+```
+
+	ALL :: ```
+#arg=gim-command
+Runs a gim command in all repositories. Must be ran from a root of git repos
+```
+
+	BULK :: ```
+#arg=git-command
+Runs a git command in all repositories. Must be ran from a root of git repos
+
+Pass --dry-run afterwards, if the command supports it
+```
+
 	cmds := []flags.Option {
+		{name = "addremove", help = `Stages everything`},
+		{name = "all", help = ALL},
+		{name = "bulk", help = BULK, var = &opt.args, fn = get_greedy_array},
+		{name = "bundle", help = `Bundle a repository`},
 		{name = "clean", help = `Clean working tree`},
 		{name = "close", help = `Remove worktree`},
-		{
-			name = "open",
-			help = `#arg=path [commit-ish] [git-option],force
- Create worktree
- When using -B flag, omit the branch name`,
-			var = &opt.open,
-			fn = get_greedy_array,
-		},
-		{name = "bundle", help = `Bundle a repository`},
-		{
-			name = "bundle-all",
-			help = `
- Bundle all repositories.
- Must be ran from a root of git repos`,
-		},
-		{
-			name = "commit",
-			help = `#arg=git-option
- Stage changes and commit`,
-			var = &opt.commit,
-			fn = get_greedy_array,
-		},
-		{name = "update", help = `Update current checkout`},
+		{name = "commit", help = COMMIT, var = &opt.args, fn = get_greedy_array},
+		{name = "news", help = `Displays commits since`, var = &opt.arg, fn = flags.get_string},
+		{name = "not-clean", help = `Check if any repository is not clean`},
+		{name = "open", help = OPEN, var = &opt.args, fn = get_greedy_array},
 		{name = "up", help = `#hidden`},
-		{
-			name = "not-clean",
-			help = `
- Check if any repository is not clean.
- Must be ran from a root of git repos`,
-		},
-		{name = "addremove", help = `Stages everything`},
-		{
-			name = "all",
-			help = `#arg=CMD
- Runs a command in all repositories.
- Must be ran from a root of git repos
-
- Pass --dry-run afterwards, if the command supports it`,
-			var = &opt.all,
-			fn = get_greedy_array,
-		},
+		{name = "push-today", help = `Push changes, if there`},
+		{name = "update", help = `Update current checkout`},
 	}
 
 	m := flags.init(opts) or_return
 	defer delete(m)
 
 	command: string
-	command_set: bool
+	all_command, command_set: bool
 	has_err: bool
 	for flags.has_args_left() {
 		err := flags.parse(m, opts)
@@ -116,6 +110,10 @@ _main :: proc() -> bool {
 			flags.usage(opts)
 			return true
 		case .Not_Opt:
+			if flags.optopt == "all" {
+				all_command = true
+				break
+			}
 			if command_set {
 				has_err = true
 				log.errorf("The command %q was already specified", command)
@@ -141,44 +139,60 @@ _main :: proc() -> bool {
 	}
 	if has_err do return false
 
+	err: os.Error
+
 	if len(opt.directory) == 0 {
-		err: os.Error
-		opt.directory, err = os.get_working_directory(context.temp_allocator)
-		if err != nil {
-			log.error(os.error_string(err))
-			return false
-		}
+		opt.directory, err = os.get_working_directory(context.allocator)
+	} else {
+		opt.directory, err = os.get_absolute_path(opt.directory, context.allocator)
 	}
 
-	{
-		err := os.change_directory(opt.directory)
-		if err != nil {
-			log.errorf("%s: %s", opt.directory, os.error_string(err))
-			return false
-		}
+	if err != nil {
+		log.error(os.error_string(err))
+		return false
 	}
 
-	ok := run_cmd(command)
+	cd(opt.directory) or_return
 
-	return ok
+	procedure := get_cmd(command)
+	if procedure == nil do return false
+
+	if all_command {
+		if command == "bulk" {
+			log.errorf("all command cannot be used with \"bulk\"")
+			return false
+		}
+		return all(procedure)
+	}
+
+	return procedure()
 }
 
-run_cmd :: proc(command: string) -> bool {
+cd :: proc(dir: string) -> bool {
+	err := os.change_directory(opt.directory)
+	if err != nil {
+		log.errorf("%s: %s", opt.directory, os.error_string(err))
+		return false
+	}
+	return true
+}
+
+get_cmd :: proc(command: string) -> #type proc() -> bool {
 	switch command {
-  // odinfmt: disable
-	case "addremove":     return addremove()
-	case "all":           return all()
-	case "bundle":        return bundle()
-	// TBD: port _all commands to all
-	case "bundle-all":    return bundle_all()
-	case "clean":         return clean()
-	case "close":         return close()
-	case "commit":        return commit()
-	case "not-clean":     return not_clean()
-	case "open":          return open()
-	case "update", "up":  return update()
-  // odinfmt: enable
+    // odinfmt: disable
+	case "addremove":     return addremove
+	case "bundle":        return bundle
+    case "bulk":          return bulk
+	case "clean":         return clean
+	case "close":         return close
+	case "commit":        return commit
+	case "news":          return news
+	case "not-clean":     return not_clean
+	case "open":          return open
+	case "push-today":    return push_today
+	case "update", "up":  return update
+    // odinfmt: enable
 	}
 
-	return false
+	return nil
 }

@@ -233,10 +233,26 @@ close :: proc() -> (ok: bool) {
 		log.errorf("%s: %s", worktree, os.error_string(err))
 	}
 
-	err = os.remove(git_file)
+	files: []os.File_Info
+	files, err = os.read_directory_by_path(opt.directory, -1, context.allocator)
 	if err != nil {
-		log.errorf("%s: %s", git_file, os.error_string(err))
+		log.errorf("%s: %s", opt.directory, os.error_string(err))
 		return false
+	}
+
+	err_count: int
+	for file in files {
+		err: os.Error
+		#partial switch file.type {
+		case .Directory:
+			err = os.remove_all(file.fullpath)
+		case:
+			err = os.remove(file.fullpath)
+		}
+		if err != nil {
+			log.errorf("%s: %s", file.fullpath, os.error_string(err))
+			return false
+		}
 	}
 
 	return ok
